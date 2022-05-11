@@ -126,7 +126,7 @@
                     if (!db.hasOwnProperty(house.houseid)) {
                         db[house.houseid] = house
                         await fs.outputJson(db_des, db)
-                        const message = message_template('新上架', db['10980919'])
+                        const message = message_template('新上架', house)
                         await line_notify(line_keys, message)
                     }
                 })
