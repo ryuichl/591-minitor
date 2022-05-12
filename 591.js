@@ -42,9 +42,9 @@
                     section: 371,
                     shape: '1,2',
                     pattern: '3,4',
-                    houseage: '3$_5$'
-                    // area: '25$_45$'
-                    // price: '1000$_3000$'
+                    houseage: '3$_5$',
+                    area: '25$_45$',
+                    price: '1000$_3000$'
                 },
                 responseType: 'json',
                 resolveBodyOnly: true
@@ -59,7 +59,7 @@
                 '時間 : ' +
                 dayjs().format('YYYY/MM/DD HH:mm:ss') +
                 '\n' +
-                '品項 : ' +
+                '標題 : ' +
                 house.title +
                 '\n' +
                 '價格 : ' +
@@ -129,12 +129,14 @@
                 const token = await get_csrf(client)
                 const search_result = await house_search(client, token)
                 const total_rows = search_result.data.total
-                await Promise.map([...Array(Math.ceil(total_rows / 30))], async (e) => {
-                    const search_result = await house_search(client, token)
+                let offset = 0
+                await Promise.mapSeries([...Array(Math.ceil(total_rows / 30))], async (e) => {
+                    const search_result = await house_search(client, token, offset)
                     await Promise.mapSeries(search_result.data.house_list, async (house) => {
                         if (!db.hasOwnProperty(house.houseid)) {
                             db[house.houseid] = house
                             await fs.outputJson(db_des, db)
+                            console.log(house.houseid)
                             const message = message_template('新上架', house)
                             await line_notify(line_keys, message)
                         }
