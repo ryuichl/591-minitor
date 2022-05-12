@@ -26,7 +26,7 @@
             const token = html.slice(start_index + 33, end_index)
             return token
         }
-        const house_search = async (client, csrf) => {
+        const house_search = async (client, csrf, firstRow = 0) => {
             const options = {
                 method: 'GET',
                 url: `https://sale.591.com.tw/home/search/list`,
@@ -35,16 +35,16 @@
                     'X-CSRF-TOKEN': csrf
                 },
                 searchParams: {
+                    firstRow,
                     type: 2,
                     shType: 'list',
                     regionid: 4,
                     section: 371,
                     shape: '1,2',
                     pattern: '3,4',
-                    houseage: '3$_10$',
-                    area: '25$_45$',
-                    price: '1000$_3000$',
-                    area: '25$_45$'
+                    houseage: '3$_5$'
+                    // area: '25$_45$'
+                    // price: '1000$_3000$'
                 },
                 responseType: 'json',
                 resolveBodyOnly: true
@@ -103,11 +103,18 @@
         if (argv.job === 'init') {
             const token = await get_csrf(client)
             const search_result = await house_search(client, token)
-            const houses = search_result.data.house_list.reduce((obj, house) => {
-                obj[house.houseid] = house
-                return obj
-            }, {})
+            const total_rows = Number(search_result.data.total)
+            const houses = {}
+            let offset = 0
+            await Promise.mapSeries([...Array(Math.ceil(total_rows / 30))], async (e) => {
+                const search_result = await house_search(client, token, offset)
+                search_result.data.house_list.map((house) => {
+                    houses[house.houseid] = house
+                })
+                offset += 30
+            })
             await fs.outputJson(db_des, houses)
+            console.log(Object.keys(houses).length)
             console.log('init done')
             return process.exit(0)
         } else if (argv.job === 'line') {
@@ -121,14 +128,18 @@
                 console.log(`job start ${dayjs().format()}`)
                 const token = await get_csrf(client)
                 const search_result = await house_search(client, token)
-                const houses = search_result.data.house_list
-                await Promise.map(houses, async (house) => {
-                    if (!db.hasOwnProperty(house.houseid)) {
-                        db[house.houseid] = house
-                        await fs.outputJson(db_des, db)
-                        const message = message_template('新上架', house)
-                        await line_notify(line_keys, message)
-                    }
+                const total_rows = search_result.data.total
+                await Promise.map([...Array(Math.ceil(total_rows / 30))], async (e) => {
+                    const search_result = await house_search(client, token)
+                    await Promise.mapSeries(search_result.data.house_list, async (house) => {
+                        if (!db.hasOwnProperty(house.houseid)) {
+                            db[house.houseid] = house
+                            await fs.outputJson(db_des, db)
+                            const message = message_template('新上架', house)
+                            await line_notify(line_keys, message)
+                        }
+                    })
+                    offset += 30
                 })
                 console.log('done')
             },
